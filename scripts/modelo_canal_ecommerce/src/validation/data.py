@@ -72,7 +72,7 @@ class DataIngestion:
         """
         Calcula e retorna dados de suporte global agregados com extensão futura.
         """
-        table_name = "historico_suporte_loja"
+        table_name = "historico_suporte_ecommerce"
         print(f"🌍 Carregando suporte global (Spark Aggregation)...")
 
         df_spark = (self.spark.table(f"{self.config.CATALOG}.{self.config.SCHEMA}.{table_name}")
