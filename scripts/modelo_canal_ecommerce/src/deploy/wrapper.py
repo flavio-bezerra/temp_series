@@ -59,7 +59,7 @@ class UnifiedForecaster(mlflow.pyfunc.PythonModel):
         Isso é necessário porque o Darts precisa de "slots" de tempo futuros onde ele vai encaixar as covariáveis.
         """
         # Safety Buffer: Margem de segurança para lags (se usamos lag-3, precisamos de histórico anterior tbm)
-        safety_buffer = self.metadata.get("max_lag", 15) + 2
+        safety_buffer = n + self.metadata.get("max_lag", 15) + 15
         
         if 'data' not in df.columns or 'codigo_loja' not in df.columns:
             return df
