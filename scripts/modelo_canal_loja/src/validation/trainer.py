@@ -193,7 +193,7 @@ class ModelTrainer:
                         predict_kwargs = {"n": self.config.FORECAST_HORIZON, 'series': val_context_series}
                         
                         if model.supports_past_covariates:
-                             predict_kwargs['past_covariates'] = [c.drop_after(context_cutoff) for c in full_covariates_scaled]
+                             predict_kwargs['past_covariates'] = full_covariates_scaled
                         if model.supports_future_covariates:
                              predict_kwargs['future_covariates'] = full_covariates_scaled 
                         

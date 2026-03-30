@@ -159,7 +159,7 @@ class ModelTrainer:
                     local_path = f"{self.config.PATH_MODELS}/{filename}"
                     model.save(local_path)                  
 
-                    full_model_name = f"{self.config.CATALOG}.{self.config.SCHEMA}.loja_{model_name}"
+                    full_model_name = f"{self.config.CATALOG}.{self.config.SCHEMA}.ecommerce_{model_name}"
                     artifacts = {"darts_model": local_path}
                     if model.supports_future_covariates: artifacts["future_covariates"] = covariates_path                    
 
@@ -193,7 +193,7 @@ class ModelTrainer:
                         predict_kwargs = {"n": self.config.FORECAST_HORIZON, 'series': val_context_series}
                         
                         if model.supports_past_covariates:
-                             predict_kwargs['past_covariates'] = [c.drop_after(context_cutoff) for c in full_covariates_scaled]
+                             predict_kwargs['past_covariates'] = full_covariates_scaled
                         if model.supports_future_covariates:
                              predict_kwargs['future_covariates'] = full_covariates_scaled 
                         
