@@ -249,10 +249,16 @@ class UnifiedForecaster(mlflow.pyfunc.PythonModel):
                     store_df = store_df.copy().sort_values('data').reset_index(drop=True)
 
                     # ── 4a. TARGET ──────────────────────────────────────────────
-                    history_df = store_df.dropna(subset=['target_vendas'])
-                    if history_df.empty:
+                    # Em vez de dropna (que encolhe a série e quebra o max_lag exigido pelo modelo),
+                    # filtramos até a última data com target não nulo e preenchemos histórico faltante com 0.
+                    last_hist_dt = store_df.loc[store_df['target_vendas'].notna(), 'data'].max()
+                    if pd.isna(last_hist_dt):
                         print(f"⚠️  Loja {store_id}: sem histórico de target. Pulando.")
                         continue
+
+                    # Assegura que todo o histórico disponível é usado (preenchendo gaps com zero)
+                    history_df = store_df[store_df['data'] <= last_hist_dt].copy()
+                    history_df['target_vendas'] = history_df['target_vendas'].fillna(0.0)
 
                     # Constrói TimeSeries do target com nome da coluna = store_id
                     ts_target = TimeSeries.from_dataframe(
@@ -276,8 +282,13 @@ class UnifiedForecaster(mlflow.pyfunc.PythonModel):
                     store_ids_map.append(store_id)
 
                     # ── 4b. COVARIÁVEIS ─────────────────────────────────────────
-                    # Colunas base (globais + calendário) disponíveis no input desta loja
-                    avail_cov = [c for c in base_cov_cols if c in store_df.columns]
+                    # Colunas base (globais + calendário) baseadas no metadata.
+                    # Se ausente, preenche com 0.0 para garantir Shape Consistency no MinMaxScaler.
+                    avail_cov = []
+                    for c in base_cov_cols:
+                        if c not in store_df.columns:
+                            store_df[c] = 0.0
+                        avail_cov.append(c)
 
                     # Renomeia is_feriado → feriado_{store_id} (padrão do treino)
                     feriado_col = f'feriado_{store_id}'
