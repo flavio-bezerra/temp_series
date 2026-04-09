@@ -267,7 +267,11 @@ class ModelTrainer:
         
         metrics = {"smape": 0.0, "rmse": 0.0}
         if valid_preds:
-            metrics["smape"] = float(np.mean(smape(valid_reals, valid_preds)))
+            try:
+                metrics["smape"] = float(np.mean(smape(valid_reals, valid_preds)))
+            except ValueError:
+                # sMAPE exige valores estritamente positivos; lojas com vendas zero causam erro
+                metrics["smape"] = -1.0
             metrics["rmse"] = float(np.mean(rmse(valid_reals, valid_preds)))
             
         return {"metrics": metrics, "dfs": res_dfs}
