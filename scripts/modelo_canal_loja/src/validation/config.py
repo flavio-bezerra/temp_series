@@ -81,7 +81,7 @@ class Config:
             self.N_EPOCHS = 20
             self.LAGS = 5
 
-        self.SCHEMA: str = "cvc_val"
+        self.SCHEMA: str = "cvc"
         
         # --- CONSTANTES DE DIRETÓRIO (Unity Catalog Volumes) ---
         # Caminhos onde artefatos temporários e modelos serão salvos.
