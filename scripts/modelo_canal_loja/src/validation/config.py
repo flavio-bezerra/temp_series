@@ -5,6 +5,10 @@ Este módulo centraliza todos os parâmetros e constantes utilizados no pipeline
 Sua principal função é permitir a parametrização dinâmica via Databricks Widgets, facilitando a execução
 de experimentos com diferentes janelas de tempo, catálogos ou hiperparâmetros sem alterar o código.
 
+A classe Config é agnóstica ao ambiente: o catálogo (ds_dev, ds_hml, ds_prod) é injetado via
+Databricks Widget "catalog" ou via parâmetro de Job no GitHub Actions, permitindo promoção
+entre ambientes SEM alteração de código.
+
 Classes:
 - Config: Classe Singleton-like que carrega e armazena as configurações.
 """
@@ -15,12 +19,27 @@ from typing import Optional, List
 from datetime import datetime
 from pyspark.sql import SparkSession
 
+# ─── CONSTANTES DE CANAL ───────────────────────────────────────────────────────
+# Identificador do canal de vendas. Usado para construir caminhos de artefatos,
+# nomes de experimentos e tabelas de métricas de forma dinâmica.
+_CANAL = "loja"
+
+# ─── DEFAULT DO CATÁLOGO (DESENVOLVIMENTO) ──────────────────────────────────────
+# Valor padrão usado quando nenhum widget/parâmetro é fornecido.
+# Em CI/CD, o GitHub Actions injeta o catálogo correto (ds_hml, ds_prod) via widget.
+_DEFAULT_CATALOG = "ds_dev"
+
+
 class Config:
     """
     Gerenciador de Configurações para o Pipeline de Validação.
     
     Esta classe tenta ler os parâmetros definidos na interface do Databricks (Widgets).
     Se não estiver rodando no Databricks (ex: teste local), define valores padrão seguros.
+
+    A resolução do catálogo segue a ordem de prioridade:
+    1. Widget "catalog" do Databricks (injetável via Job/GitHub Actions)
+    2. Valor default de desenvolvimento (_DEFAULT_CATALOG = "ds_dev")
     """
     def __init__(self, spark_session: Optional[SparkSession] = None):
         self.spark_session: SparkSession = spark_session
@@ -40,12 +59,13 @@ class Config:
         try:
             # --- DEFINIÇÃO DOS WIDGETS ---
             # Widgets permitem input do usuário na UI do Notebook.
+            # Quando executado via Job (CI/CD), os valores são injetados como parâmetros.
             try:
                 if dbutils:
                     dbutils.widgets.text("data_inicio_treino", "2019-01-01", "1. Início Treino")
                     dbutils.widgets.text("data_fim_treino", "2025-01-01", "2. Fim Treino (Corte)")
                     dbutils.widgets.text("data_fim_validacao", "2025-12-31", "3. Fim Validação (Ground Truth)")
-                    dbutils.widgets.text("catalog", "ds_dev", "4. Catálogo")
+                    dbutils.widgets.text("catalog", _DEFAULT_CATALOG, "4. Catálogo")
                     dbutils.widgets.text("forecast_horizon", "35", "5. Horizonte (Dias)")
                     dbutils.widgets.text("n_epochs", "20", "6. Épocas (DL Models)")
                     dbutils.widgets.text("lags", "5", "7. Lags")
@@ -76,7 +96,7 @@ class Config:
         except (NameError, Exception):
             print('⚠️ Célula rodando fora do contexto de Widgets do Databricks/dbutils.')
             # Define valores padrão (Defaults) para desenvolvimento/teste local
-            self.CATALOG = "ds_dev"
+            self.CATALOG = _DEFAULT_CATALOG
             self.FORECAST_HORIZON = 35
             self.N_EPOCHS = 20
             self.LAGS = 5
@@ -84,13 +104,16 @@ class Config:
         self.SCHEMA: str = "cvc"
         
         # --- CONSTANTES DE DIRETÓRIO (Unity Catalog Volumes) ---
-        # Caminhos onde artefatos temporários e modelos serão salvos.
-        self.VOLUME_ROOT: str = f"/Volumes/{self.CATALOG}/{self.SCHEMA}/experiments/artefacts/loja"
+        # Caminhos construídos DINAMICAMENTE a partir do catálogo injetado.
+        # Isso garante isolamento total de artefatos entre ambientes (dev/hml/prod).
+        self.VOLUME_ROOT: str = f"/Volumes/{self.CATALOG}/{self.SCHEMA}/experiments/artefacts/{_CANAL}"
         self.PATH_SCALERS: str = f"{self.VOLUME_ROOT}/scalar/validation"
         self.PATH_MODELS: str = f"{self.VOLUME_ROOT}/models/validation"
         
         # --- CONFIGURAÇÃO MLFLOW ---
-        self.EXPERIMENT_NAME: str = "/Workspace/Shared/data_science/projetos/cvc_curva_de_vendas_por_canal/experiments/Model_Validation_CVC_Loja"
+        # O EXPERIMENT_NAME é fixo por canal, pois os experimentos MLflow são organizados
+        # por canal e não por ambiente. O catálogo do Unity Catalog já garante o isolamento.
+        self.EXPERIMENT_NAME: str = f"/Workspace/Shared/data_science/projetos/cvc_curva_de_vendas_por_canal/experiments/Model_Validation_CVC_{_CANAL.capitalize()}"
         self.MLFLOW_REGISTRY_URI: str = "databricks-uc" # Usa Unity Catalog como registro de modelos
         
         # Definição de lags para modelos de regressão (ex: [0, -1, -2] significa t, t-1, t-2)
@@ -105,3 +128,7 @@ class Config:
                  os.makedirs(path, exist_ok=True)
         except Exception:
              print("⚠️ Não foi possível criar diretórios locais (pode ser erro de permissão no Volume).")
+
+        # --- LOG DE CONFIGURAÇÃO ---
+        # Imprime o ambiente resolvido para facilitar depuração em Jobs CI/CD
+        print(f"📋 [Config {_CANAL.upper()}] Catálogo: {self.CATALOG} | Volume: {self.VOLUME_ROOT}")
